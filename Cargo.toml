@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "src/blockchain_junction_backend"
+]
+resolver = "2"
