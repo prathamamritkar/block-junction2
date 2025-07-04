@@ -1,0 +1,31 @@
+type SwapRequest = record {
+  id: nat64;
+  user: principal;
+  from_asset: Asset;
+  to_asset_symbol: text;
+  to_chain: Chain;
+  deadline: nat64;
+};
+type Result_3 = variant { Ok: vec record { text; nat64 }; Err: text };
+type Result_2 = variant { Ok: SwapRequest; Err: text };
+type Result_1 = variant { Ok: nat64; Err: text };
+type Result = variant { Ok: null; Err: text };
+type Chain = variant { ICP; Bitcoin };
+type Asset = record {
+  chain: Chain;
+  symbol: text;
+  amount: nat64;
+};
+service : {
+  create_swap_request: (text, nat64, text, Chain, nat64) -> (Result_1);
+  deposit_asset: (Asset) -> (Result);
+  execute_swap: (nat64, nat64) -> (Result);
+  get_all_pending_swaps: () -> (vec SwapRequest) query;
+  get_all_user_balances: (principal) -> (Result_3) query;
+  get_or_generate_user_bitcoin_deposit_address: () -> (variant { Ok: text; Err: text });
+  get_swap_request: (nat64) -> (Result_2) query;
+  get_user_balance: (principal, text) -> (Result_1) query;
+  get_user_bitcoin_deposit_address: () -> (variant { Ok: text; Err: text }) query;
+  greet: (text) -> (text) query;
+  withdraw_asset: (text, nat64, Chain, text) -> (Result);
+}
