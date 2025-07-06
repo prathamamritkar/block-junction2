@@ -9,6 +9,12 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-candid = "0.10"
-ic-cdk = "0.17"
-ic-cdk-timers = "0.11" # Feel free to remove this dependency if you don't need timers
+candid = "0.10.6" # Latest in 0.10.x series, compatible with ic-cdk 0.17.x
+ic-cdk = "0.17.2"
+ic-cdk-macros = "0.17.2"
+ic-cdk-timers = "0.11.0" 
+serde = "1.0" # Generally useful and often a transitive dependency
+ic-stable-structures = "0.6.2" # Added this as it's used in the code
+
+# Ensure `dev-dependencies` for tests are also considered if any were present.
+# For now, focusing on main dependencies.
