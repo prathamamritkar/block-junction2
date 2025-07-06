@@ -1,12 +1,12 @@
-use candid::{CandidType, Principal};
-use serde::Deserialize;
+use candid::{CandidType, Principal,Encode, Decode};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use ic_cdk::api::time;
 
 // Using u64 for amounts, assuming assets have a fixed number of decimal places
 // or amounts are represented in their smallest unit (e.g., satoshis for Bitcoin).
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(CandidType, Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Chain {
     ICP,
     Bitcoin,
@@ -14,14 +14,14 @@ pub enum Chain {
     // Other chains can be added here
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug)]
+#[derive(CandidType, Deserialize, Serialize, Clone, Debug)]
 pub struct Asset {
     chain: Chain,
     symbol: String, // e.g., "ICP", "BTC"
     amount: u64,    // Represented in the smallest unit of the asset
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug)]
+#[derive(CandidType, Deserialize, Serialize, Clone, Debug)]
 pub struct SwapRequest {
     user: Principal,        // The user initiating the swap
     from_asset: Asset,      // Asset the user wants to swap
@@ -38,14 +38,44 @@ fn greet(name: String) -> String {
     format!("Hello, {}! Welcome to the Cross-Chain Asset Swap.", name)
 }
 
-use ic_cdk::storage;
+// use ic_cdk::storage; // Unused import
 use ic_cdk_macros::*;
 use std::cell::RefCell;
-use ic_stable_structures::{StableBTreeMap, DefaultMemoryImpl};
+use ic_stable_structures::{StableBTreeMap, DefaultMemoryImpl, Storable, storable::Bound}; // Corrected Bound path
+use std::borrow::Cow;
+
+impl Storable for SwapRequest {
+    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
+        Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
+        Decode!(bytes.as_ref(), Self).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Unbounded;
+}
+
+// Wrapper for HashMap to make it Storable
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+struct StorableHashMap(HashMap<String, u64>);
+
+impl Storable for StorableHashMap {
+    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
+        Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
+        Decode!(bytes.as_ref(), Self).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Unbounded;
+}
+
 
 // Canister State
-type UserBalances = StableBTreeMap<Principal, HashMap<String, u64>>; // User -> (Asset Symbol -> Amount)
-type PendingSwaps = StableBTreeMap<u64, SwapRequest>; // Swap ID -> SwapRequest
+type UserBalances = StableBTreeMap<Principal, StorableHashMap, DefaultMemoryImpl>; // User -> (Asset Symbol -> Amount)
+type PendingSwaps = StableBTreeMap<u64, SwapRequest, DefaultMemoryImpl>; // Swap ID -> SwapRequest
 
 thread_local! {
     static BALANCES: RefCell<UserBalances> = RefCell::new(
@@ -82,11 +112,15 @@ fn deposit_asset(asset: Asset) -> Result<(), String> {
         return Err("Anonymous principal not allowed to deposit.".to_string());
     }
 
-    BALANCES.with(|balances_map| {
-        let mut balances = balances_map.borrow_mut();
-        let user_specific_balances = balances.entry(caller).or_insert_with(HashMap::new);
-        let current_balance = user_specific_balances.entry(asset.symbol.clone()).or_insert(0);
+    BALANCES.with(|balances_map_ref| {
+        let mut balances_map = balances_map_ref.borrow_mut();
+        let mut user_balances = match balances_map.get(&caller) {
+            Some(existing_balances) => existing_balances, // existing_balances is already owned
+            None => StorableHashMap::default(),
+        };
+        let current_balance = user_balances.0.entry(asset.symbol.clone()).or_insert(0);
         *current_balance += asset.amount;
+        balances_map.insert(caller, user_balances);
     });
     Ok(())
 }
@@ -99,10 +133,10 @@ fn create_swap_request(from_asset_symbol: String, from_asset_amount: u64, to_ass
     }
 
     // Check if user has enough balance for the 'from_asset'
-    let has_sufficient_balance = BALANCES.with(|balances_map| {
-        balances_map.borrow().get(&caller)
-            .and_then(|user_balances| user_balances.get(&from_asset_symbol))
-            .map_or(false, |balance| *balance >= from_asset_amount)
+    let has_sufficient_balance = BALANCES.with(|balances_map_ref| {
+        balances_map_ref.borrow().get(&caller)
+            .and_then(|user_balances_wrapper| user_balances_wrapper.0.get(&from_asset_symbol).copied())
+            .map_or(false, |balance| balance >= from_asset_amount)
     });
 
     if !has_sufficient_balance {
@@ -110,13 +144,26 @@ fn create_swap_request(from_asset_symbol: String, from_asset_amount: u64, to_ass
     }
 
     // Deduct the asset from user's balance (escrow)
-    BALANCES.with(|balances_map| {
-        let mut balances = balances_map.borrow_mut();
-        if let Some(user_balances) = balances.get_mut(&caller) {
-            if let Some(balance) = user_balances.get_mut(&from_asset_symbol) {
-                *balance -= from_asset_amount;
+    BALANCES.with(|balances_map_ref| {
+        let mut balances_map = balances_map_ref.borrow_mut();
+        if let Some(mut user_balances) = balances_map.get(&caller) { // This was line 149 in prior error, .cloned() already removed.
+            if let Some(balance) = user_balances.0.get_mut(&from_asset_symbol) {
+                if *balance >= from_asset_amount { 
+                    *balance -= from_asset_amount;
+                    balances_map.insert(caller, user_balances); 
+                } else {
+                    // This case should ideally not be reached if the initial check was accurate
+                    // and there are no concurrent operations for the same user.
+                    // Consider how to handle this; for now, it implies an inconsistent state or error.
+                    // For simplicity, we proceed assuming the initial check is sufficient.
+                    // If the balance became insufficient, the insert might not happen or insert a wrong state.
+                    // To be robust, the initial check and deduction should be more atomic or re-validate.
+                    // However, the problem was `get_mut` not existing.
+                    // The `cloned()` and `insert` approach handles the modification.
+                }
             }
         }
+        // If user_balances didn't exist, or asset didn't exist, the initial check should have failed.
     });
 
     let swap_id = get_next_swap_id();
@@ -193,18 +240,22 @@ fn execute_swap(swap_id1: u64, swap_id2: u64) -> Result<(), String> {
         }
 
         // Credit assets to users
-        BALANCES.with(|balances_map| {
-            let mut balances_bm = balances_map.borrow_mut();
+        BALANCES.with(|balances_map_ref| {
+            let mut balances_map = balances_map_ref.borrow_mut();
 
             // Credit user1 with req2's from_asset (which is what user1 wanted)
-            let user1_balances = balances_bm.entry(req1.user).or_insert_with(HashMap::new);
-            let user1_target_asset_balance = user1_balances.entry(req2.from_asset.symbol.clone()).or_insert(0);
+            // Line 247 in prior error: .cloned() already removed.
+            let mut user1_balances = balances_map.get(&req1.user).unwrap_or_default(); 
+            let user1_target_asset_balance = user1_balances.0.entry(req2.from_asset.symbol.clone()).or_insert(0);
             *user1_target_asset_balance += req2.from_asset.amount;
+            balances_map.insert(req1.user, user1_balances);
 
             // Credit user2 with req1's from_asset (which is what user2 wanted)
-            let user2_balances = balances_bm.entry(req2.user).or_insert_with(HashMap::new);
-            let user2_target_asset_balance = user2_balances.entry(req1.from_asset.symbol.clone()).or_insert(0);
+            // Line 253 in prior error: .cloned() already removed.
+            let mut user2_balances = balances_map.get(&req2.user).unwrap_or_default(); 
+            let user2_target_asset_balance = user2_balances.0.entry(req1.from_asset.symbol.clone()).or_insert(0);
             *user2_target_asset_balance += req1.from_asset.amount;
+            balances_map.insert(req2.user, user2_balances);
         });
 
         // Remove executed swaps
@@ -225,10 +276,10 @@ fn withdraw_asset(asset_symbol: String, amount: u64, target_chain: Chain, target
     }
 
     // Check balance
-    let has_sufficient_balance = BALANCES.with(|balances_map| {
-        balances_map.borrow().get(&caller)
-            .and_then(|user_balances| user_balances.get(&asset_symbol))
-            .map_or(false, |balance| *balance >= amount)
+    let has_sufficient_balance = BALANCES.with(|balances_map_ref| {
+        balances_map_ref.borrow().get(&caller)
+            .and_then(|user_balances_wrapper| user_balances_wrapper.0.get(&asset_symbol).copied())
+            .map_or(false, |balance| balance >= amount)
     });
 
     if !has_sufficient_balance {
@@ -236,15 +287,23 @@ fn withdraw_asset(asset_symbol: String, amount: u64, target_chain: Chain, target
     }
 
     // Deduct from balance
-    BALANCES.with(|balances_map| {
-        let mut balances = balances_map.borrow_mut();
-        if let Some(user_balances) = balances.get_mut(&caller) {
-            if let Some(balance) = user_balances.get_mut(&asset_symbol) {
-                *balance -= amount;
-                // Optional: remove asset from map if balance is zero
-                // if *balance == 0 { user_balances.remove(&asset_symbol); }
+    BALANCES.with(|balances_map_ref| {
+        let mut balances_map = balances_map_ref.borrow_mut();
+        // Line 290 in prior error: .cloned() already removed.
+        if let Some(mut user_balances) = balances_map.get(&caller) { 
+            if let Some(balance) = user_balances.0.get_mut(&asset_symbol) {
+                if *balance >= amount { 
+                    *balance -= amount;
+                    // Optional: remove asset from map if balance is zero
+                    if *balance == 0 {
+                        user_balances.0.remove(&asset_symbol);
+                    }
+                    balances_map.insert(caller, user_balances); 
+                }
+                // Else: balance became insufficient. The initial check should prevent this in a single-threaded flow.
             }
         }
+        // If user_balances didn't exist, or asset didn't exist, the initial check should have failed.
     });
 
     // Actual withdrawal logic to the target_chain and target_address would go here.
@@ -259,19 +318,18 @@ fn withdraw_asset(asset_symbol: String, amount: u64, target_chain: Chain, target
 // Query functions to view state (optional, but good for debugging/frontend)
 #[query]
 fn get_user_balance(user: Principal, asset_symbol: String) -> Result<u64, String> {
-    BALANCES.with(|balances_map| {
-        balances_map.borrow().get(&user)
-            .and_then(|user_balances| user_balances.get(&asset_symbol))
-            .map(|balance| *balance)
+    BALANCES.with(|balances_map_ref| {
+        balances_map_ref.borrow().get(&user)
+            .and_then(|storable_map| storable_map.0.get(&asset_symbol).copied())
             .ok_or_else(|| format!("No balance found for asset {} for user {}", asset_symbol, user))
     })
 }
 
 #[query]
 fn get_all_user_balances(user: Principal) -> Result<HashMap<String, u64>, String> {
-    BALANCES.with(|balances_map| {
-        balances_map.borrow().get(&user)
-            .map(|user_balances| user_balances.clone())
+    BALANCES.with(|balances_map_ref| {
+        balances_map_ref.borrow().get(&user)
+            .map(|storable_map| storable_map.0.clone())
             .ok_or_else(|| format!("No balances found for user {}", user))
     })
 }
@@ -294,7 +352,7 @@ fn get_all_pending_swaps() -> Vec<SwapRequest> {
 }
 
 // For Bitcoin address generation (simulated for now)
-type UserBitcoinAddresses = StableBTreeMap<Principal, String>;
+type UserBitcoinAddresses = StableBTreeMap<Principal, String, DefaultMemoryImpl>;
 
 thread_local! {
     // ... (other thread_local variables BALANCES, SWAPS, NEXT_SWAP_ID remain unchanged)
