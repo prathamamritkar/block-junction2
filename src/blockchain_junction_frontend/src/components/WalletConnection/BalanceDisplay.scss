@@ -1,0 +1,93 @@
+.balance-display {
+  .balance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+
+    h4 {
+      margin: 0;
+      color: #374151;
+    }
+
+    .refresh-btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+    }
+  }
+
+  .balance-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .balance-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+
+    .asset-info {
+      display: flex;
+      flex-direction: column;
+
+      .asset-symbol {
+        font-weight: 600;
+        color: #374151;
+      }
+
+      .asset-name {
+        font-size: 0.9rem;
+        color: #6b7280;
+      }
+    }
+
+    .balance-amount {
+      font-weight: 600;
+      font-family: monospace;
+      color: #059669;
+    }
+  }
+
+  .no-balances {
+    text-align: center;
+    padding: 2rem;
+    color: #6b7280;
+    font-style: italic;
+  }
+
+  .btc-address-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e5e7eb;
+
+    h5 {
+      margin: 0 0 1rem 0;
+      color: #374151;
+    }
+
+    .address-display {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+
+      code {
+        flex: 1;
+        background: #f3f4f6;
+        padding: 0.75rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        overflow-wrap: break-word;
+      }
+
+      .copy-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+      }
+    }
+  }
+}

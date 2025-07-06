@@ -1,3 +1,15 @@
+type Chain = variant { 
+  ICP; 
+  Bitcoin; 
+  Ethereum; 
+};
+
+type Asset = record {
+  chain: Chain;
+  symbol: text;
+  amount: nat64;
+};
+
 type SwapRequest = record {
   id: nat64;
   user: principal;
@@ -6,26 +18,41 @@ type SwapRequest = record {
   to_chain: Chain;
   deadline: nat64;
 };
-type Result_3 = variant { Ok: vec record { text; nat64 }; Err: text };
-type Result_2 = variant { Ok: SwapRequest; Err: text };
-type Result_1 = variant { Ok: nat64; Err: text };
-type Result = variant { Ok: null; Err: text };
-type Chain = variant { ICP; Bitcoin };
-type Asset = record {
-  chain: Chain;
-  symbol: text;
-  amount: nat64;
+
+type SwapResponse = record {
+  success: bool;
+  message: text;
+  swap_id: opt nat64;
 };
+
+type BalanceResponse = record {
+  balances: vec record { text; nat64 };
+};
+
+type Result = variant { Ok: null; Err: text };
+type SwapResult = variant { Ok: SwapResponse; Err: text };
+type BalanceResult = variant { Ok: nat64; Err: text };
+type BalancesResult = variant { Ok: BalanceResponse; Err: text };
+type SwapRequestResult = variant { Ok: SwapRequest; Err: text };
+type AddressResult = variant { Ok: text; Err: text };
+
 service : {
-  create_swap_request: (text, nat64, text, Chain, nat64) -> (Result_1);
-  deposit_asset: (Asset) -> (Result);
-  execute_swap: (nat64, nat64) -> (Result);
-  get_all_pending_swaps: () -> (vec SwapRequest) query;
-  get_all_user_balances: (principal) -> (Result_3) query;
-  get_or_generate_user_bitcoin_deposit_address: () -> (variant { Ok: text; Err: text });
-  get_swap_request: (nat64) -> (Result_2) query;
-  get_user_balance: (principal, text) -> (Result_1) query;
-  get_user_bitcoin_deposit_address: () -> (variant { Ok: text; Err: text }) query;
+  // Authentication
+  login: () -> (text);
+  get_caller_principal: () -> (principal) query;
+  
+  // Balance Management
+  deposit_asset: (text, nat64) -> (text);
+  get_balance: (text) -> (nat64) query;
+  get_all_balances: () -> (BalanceResponse) query;
+  withdraw_asset: (text, nat64, Chain, text) -> (text);
+  
+  // Swap Operations
+  create_swap_request: (text, nat64, text, Chain, nat64) -> (SwapResponse);
+  execute_swap: (nat64, nat64) -> (SwapResponse);
+  get_pending_swaps: () -> (vec SwapRequest) query;
+  
+  // Utility Functions
+  get_btc_address: () -> (text) query;
   greet: (text) -> (text) query;
-  withdraw_asset: (text, nat64, Chain, text) -> (Result);
 }

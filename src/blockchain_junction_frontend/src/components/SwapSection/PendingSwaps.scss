@@ -1,0 +1,118 @@
+.pending-swaps {
+  .swaps-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+
+    h4 {
+      margin: 0;
+      color: #374151;
+    }
+  }
+
+  .no-swaps {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: #6b7280;
+    font-style: italic;
+  }
+
+  .swaps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .swap-item {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+
+    &:hover {
+      background: #f3f4f6;
+      border-color: #d1d5db;
+    }
+
+    &.expired {
+      opacity: 0.7;
+      background: #fef2f2;
+      border-color: #fecaca;
+    }
+
+    .swap-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+
+      .swap-id {
+        font-weight: 600;
+        color: #374151;
+      }
+
+      .status {
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+
+        &.active {
+          background: #d1fae5;
+          color: #065f46;
+        }
+
+        &.expired {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+      }
+    }
+
+    .swap-details {
+      .swap-pair {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+
+        .from-asset,
+        .to-asset {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+
+          .label {
+            font-size: 0.8rem;
+            color: #6b7280;
+          }
+
+          .asset {
+            font-weight: 600;
+            color: #374151;
+          }
+        }
+
+        .arrow {
+          color: #6b7280;
+          font-size: 1.2rem;
+          font-weight: bold;
+        }
+      }
+
+      .swap-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        color: #6b7280;
+
+        .user,
+        .deadline {
+          font-family: monospace;
+        }
+      }
+    }
+  }
+}

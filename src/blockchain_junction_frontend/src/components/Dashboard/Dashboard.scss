@@ -1,0 +1,51 @@
+.dashboard {
+  .dashboard-placeholder {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+
+    h2 {
+      color: #374151;
+      margin-bottom: 1rem;
+    }
+
+    p {
+      color: #6b7280;
+      font-size: 1.1rem;
+    }
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 2rem;
+    
+    .wallet-section {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    
+    .swap-section {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    
+    .transaction-section {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+
+    @media (max-width: 768px) {
+      grid-template-columns: 1fr;
+      
+      .wallet-section,
+      .swap-section,
+      .transaction-section {
+        grid-column: 1;
+      }
+    }
+  }
+}
