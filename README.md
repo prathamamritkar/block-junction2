@@ -34,23 +34,28 @@ A **Cross-Chain Asset Swap Platform** built on the Internet Computer that enable
 
 ### Installation
 
-1. **Clone and setup the project:**
+1. **Clone the repository:**
 ```bash
-cd /home/pratham_unix/internship_project2/block-junction
+git clone <repository-url>
+cd block-junction
+```
+
+2. **Install dependencies:**
+```bash
 npm install
 ```
 
-2. **Start the local IC replica:**
+3. **Start the local IC replica:**
 ```bash
 dfx start --background
 ```
 
-3. **Deploy the canisters:**
+4. **Deploy the canisters:**
 ```bash
 dfx deploy
 ```
 
-4. **Start the development server:**
+5. **Start the development server:**
 ```bash
 npm start
 ```
