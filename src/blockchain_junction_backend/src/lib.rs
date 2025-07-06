@@ -86,7 +86,7 @@ thread_local! {
         StableBTreeMap::init(DefaultMemoryImpl::default())
     );
 
-    static NEXT_SWAP_ID: RefCell<u64> = RefCell::new(0);
+    static NEXT_SWAP_ID: RefCell<u64> = const { RefCell::new(0) };
 }
 
 #[init]
@@ -114,10 +114,7 @@ fn deposit_asset(asset: Asset) -> Result<(), String> {
 
     BALANCES.with(|balances_map_ref| {
         let mut balances_map = balances_map_ref.borrow_mut();
-        let mut user_balances = match balances_map.get(&caller) {
-            Some(existing_balances) => existing_balances, // existing_balances is already owned
-            None => StorableHashMap::default(),
-        };
+        let mut user_balances = balances_map.get(&caller).unwrap_or_default();
         let current_balance = user_balances.0.entry(asset.symbol.clone()).or_insert(0);
         *current_balance += asset.amount;
         balances_map.insert(caller, user_balances);
@@ -136,7 +133,7 @@ fn create_swap_request(from_asset_symbol: String, from_asset_amount: u64, to_ass
     let has_sufficient_balance = BALANCES.with(|balances_map_ref| {
         balances_map_ref.borrow().get(&caller)
             .and_then(|user_balances_wrapper| user_balances_wrapper.0.get(&from_asset_symbol).copied())
-            .map_or(false, |balance| balance >= from_asset_amount)
+            .is_some_and(|balance| balance >= from_asset_amount)
     });
 
     if !has_sufficient_balance {
@@ -279,7 +276,7 @@ fn withdraw_asset(asset_symbol: String, amount: u64, target_chain: Chain, target
     let has_sufficient_balance = BALANCES.with(|balances_map_ref| {
         balances_map_ref.borrow().get(&caller)
             .and_then(|user_balances_wrapper| user_balances_wrapper.0.get(&asset_symbol).copied())
-            .map_or(false, |balance| balance >= amount)
+            .is_some_and(|balance| balance >= amount)
     });
 
     if !has_sufficient_balance {
@@ -339,7 +336,6 @@ fn get_all_user_balances(user: Principal) -> Result<HashMap<String, u64>, String
 fn get_swap_request(swap_id: u64) -> Result<SwapRequest, String> {
     SWAPS.with(|swaps_map| {
         swaps_map.borrow().get(&swap_id)
-            .map(|req| req.clone()) // Clone to return ownership
             .ok_or_else(|| format!("Swap request with ID {} not found.", swap_id))
     })
 }
@@ -399,7 +395,9 @@ fn get_user_bitcoin_deposit_address() -> Result<String, String> {
     }
     USER_BTC_ADDRESSES.with(|addr_map_ref| {
         addr_map_ref.borrow().get(&caller)
-            .map(|addr| addr.clone())
             .ok_or_else(|| "No Bitcoin deposit address found for this user. Please generate one first.".to_string())
     })
 }
+
+// Export the Candid interface
+ic_cdk::export_candid!();
